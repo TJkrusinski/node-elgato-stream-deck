@@ -161,6 +161,24 @@ test('down and up events', t => {
 	t.is(upSpy.getCall(0).args[0], 0);
 });
 
+test('register key combo', t => {
+	const streamDeck = t.context.streamDeck;
+	const downSpy = sinon.spy();
+	const upSpy = sinon.spy();
+
+	const keyCombo = streamDeck.registerKeyCombo([0, 1]);
+
+	keyCombo.on('down', key => downSpy(key));
+	keyCombo.on('up', key => upSpy(key));
+	streamDeck.device.emit('data', Buffer.from([0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+	streamDeck.device.emit('data', Buffer.from([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+
+	t.is(downSpy.getCall(0).args[0][0], 0);
+	t.is(downSpy.getCall(0).args[0][1], 1);
+	t.is(upSpy.getCall(0).args[0][0], 0);
+	t.is(upSpy.getCall(0).args[0][1], 1);
+});
+
 test.cb('forwards error events from the device', t => {
 	const streamDeck = t.context.streamDeck;
 	streamDeck.on('error', () => {

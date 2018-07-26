@@ -107,6 +107,7 @@ class StreamDeck extends EventEmitter {
 		}
 
 		this.keyState = new Array(NUM_KEYS).fill(false);
+		this.keyComboListeners = [];
 
 		this.device.on('data', data => {
 			// The first byte is a report ID, the last byte appears to be padding.
@@ -116,8 +117,10 @@ class StreamDeck extends EventEmitter {
 			for (let i = 0; i < NUM_KEYS; i++) {
 				const keyPressed = Boolean(data[i]);
 				const stateChanged = keyPressed !== this.keyState[i];
+				const prevState = this.keyState.slice();
 				if (stateChanged) {
 					this.keyState[i] = keyPressed;
+					this._filterKeyCombos(prevState);
 					if (keyPressed) {
 						this.emit('down', i);
 					} else {
@@ -294,6 +297,46 @@ class StreamDeck extends EventEmitter {
 
 		const brightnessCommandBuffer = Buffer.from([0x05, 0x55, 0xaa, 0xd1, 0x01, percentage]);
 		this.sendFeatureReport(StreamDeck.padBufferToLength(brightnessCommandBuffer, 17));
+	}
+
+	/**
+	 * Listen for a set of keys and return an event emitter
+	 *
+	 * @param {array} keys array of keys to listen for
+	 */
+	registerKeyCombo(keys) {
+		const emitter = new EventEmitter();
+		const listener = {
+			emitter,
+			keys,
+			keyState: new Array(NUM_KEYS).fill(false),
+			latched: false,
+			unregister: () => {}
+		};
+
+		keys.forEach(key => {
+			listener.keyState[parseInt(key, 10)] = true;
+		});
+
+		this.keyComboListeners.push(listener);
+
+		return emitter;
+	}
+
+	_filterKeyCombos() {
+		this.keyComboListeners.forEach(listener => {
+			const same = listener.keyState.join('') === this.keyState.join('');
+
+			if (listener.latched && !same) {
+				listener.emitter.emit('up', listener.keys);
+			}
+
+			if (!listener.latched && same) {
+				listener.emitter.emit('down', listener.keys);
+			}
+
+			listener.latched = same;
+		});
 	}
 
 	/**
